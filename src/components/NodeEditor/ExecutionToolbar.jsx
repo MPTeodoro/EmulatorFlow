@@ -55,6 +55,7 @@ export default function ExecutionToolbar() {
       name: currentProject?.name || 'Untitled',
       nodes: workflow.nodes,
       edges: workflow.edges,
+      assets_path: imagesPath || '',
     };
 
     addLog({ level: 'info', message: `Starting "${wf.name}" on ${selectedDevice.id}...` });

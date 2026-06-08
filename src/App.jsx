@@ -9,11 +9,17 @@ import LogBar from './components/LogBar/index.jsx';
 import { AlertTriangle, RefreshCw, Download } from 'lucide-react';
 
 function encodeWorkflow(obj) {
-  return btoa(unescape(encodeURIComponent(JSON.stringify(obj, null, 2))));
+  const bytes = new TextEncoder().encode(JSON.stringify(obj, null, 2));
+  let binary = '';
+  bytes.forEach((b) => { binary += String.fromCharCode(b); });
+  return btoa(binary);
 }
 
 function decodeWorkflow(base64) {
-  return JSON.parse(decodeURIComponent(escape(atob(base64))));
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
 }
 
 export default function App() {

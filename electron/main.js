@@ -70,21 +70,31 @@ function startPythonEngine() {
       }
     }, 8000);
 
-    pythonProcess.stdout.on('data', (data) => {
-      const msg = data.toString().trim();
-      console.log('[Engine]', msg);
-      if (msg.includes('8765')) {
+    const checkReady = (msg) => {
+      if (!engineReady && msg.includes('8765')) {
         engineReady = true;
         clearTimeout(startTimeout);
         win?.webContents.send('engine-status', { ok: true });
       }
-      win?.webContents.send('python-log', { level: 'info', message: msg });
+    };
+
+    pythonProcess.stdout.on('data', (data) => {
+      const msg = data.toString().trim();
+      if (msg) {
+        console.log('[Engine]', msg);
+        checkReady(msg);
+        win?.webContents.send('python-log', { level: 'info', message: msg });
+      }
     });
 
     pythonProcess.stderr.on('data', (data) => {
       const msg = data.toString().trim();
-      console.error('[Engine ERR]', msg);
-      win?.webContents.send('python-log', { level: 'error', message: msg });
+      if (!msg) return;
+      checkReady(msg);
+      // uvicorn writes INFO logs to stderr — don't show them as errors
+      const isInfo = msg.startsWith('INFO:') || msg.startsWith('WARNING:');
+      console.log(`[Engine${isInfo ? '' : ' ERR'}]`, msg);
+      win?.webContents.send('python-log', { level: isInfo ? 'info' : 'error', message: msg });
     });
 
     pythonProcess.on('close', (code) => {

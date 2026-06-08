@@ -139,8 +139,11 @@ export default function useWebSocket() {
       mountedRef.current = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (wsRef.current) {
-        wsRef.current.close();
+        const ws = wsRef.current;
         wsRef.current = null;
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close();
+        }
       }
     };
   }, []);

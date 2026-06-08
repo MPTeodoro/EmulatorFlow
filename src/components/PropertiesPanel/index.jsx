@@ -535,7 +535,7 @@ export default function PropertiesPanel() {
     setTakingScreenshot(true);
     try {
       const base64 = await api.takeScreenshot(selectedDevice.id);
-      setScreenshotUrl(`data:image/png;base64,${base64}`);
+      setScreenshotUrl(`data:image/jpeg;base64,${base64}`);
     } catch (err) {
       addLog({ level: 'error', message: `Screenshot failed: ${err.message}` });
     } finally {
