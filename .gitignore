@@ -1,0 +1,28 @@
+node_modules/
+dist/
+release/
+.vite/
+
+# Python
+engine/__pycache__/
+engine/*.pyc
+engine/build/
+engine/dist/
+*.egg-info/
+__pycache__/
+
+# PyInstaller build artefacts (generated in CI)
+platform-tools/
+*.spec.bak
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Icon — PNG is committed; ICO is generated in CI
+assets/icon.ico
+assets/icon.icns

@@ -1,0 +1,75 @@
+name: Build & Release
+
+# Trigger: push a version tag  →  git tag v1.2.0 && git push origin v1.2.0
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    name: Windows installer
+    runs-on: windows-latest
+
+    steps:
+      # ── Source ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Python engine ─────────────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies + PyInstaller
+        run: pip install -r engine/requirements.txt pyinstaller
+
+      - name: Download Android Platform Tools (ADB)
+        run: |
+          Invoke-WebRequest `
+            -Uri "https://dl.google.com/android/repository/platform-tools-latest-windows.zip" `
+            -OutFile "platform-tools.zip"
+          Expand-Archive -Path "platform-tools.zip" -DestinationPath "."
+
+      - name: Build Python engine (PyInstaller → dist/python-engine.exe)
+        run: pyinstaller engine.spec
+
+      # ── Icon ──────────────────────────────────────────────────────────────
+      - name: Install Pillow for icon generation
+        run: pip install Pillow
+
+      - name: Generate icon PNG
+        run: python scripts/generate_icon.py
+
+      - name: Convert PNG → ICO (ImageMagick is pre-installed on windows-latest)
+        run: |
+          magick assets\icon.png `
+            -define icon:auto-resize=256,128,64,48,32,16 `
+            assets\icon.ico
+
+      # ── Electron app ──────────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build Vite + Electron installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build
+
+      # ── Upload to GitHub Release ──────────────────────────────────────────
+      - name: Upload installer to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.exe
+            release/latest.yml
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
