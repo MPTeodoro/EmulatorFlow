@@ -32,8 +32,8 @@ jobs:
             -OutFile "platform-tools.zip"
           Expand-Archive -Path "platform-tools.zip" -DestinationPath "."
 
-      - name: Build Python engine (PyInstaller → dist/python-engine.exe)
-        run: pyinstaller engine.spec
+      - name: Build Python engine (PyInstaller → engine_dist/python-engine.exe)
+        run: pyinstaller --distpath engine_dist engine.spec
 
       # ── Icon ──────────────────────────────────────────────────────────────
       - name: Install Pillow for icon generation

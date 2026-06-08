@@ -43,7 +43,7 @@
     ],
     "extraResources": [
       {
-        "from": "dist/python-engine.exe",
+        "from": "engine_dist/python-engine.exe",
         "to": "engine/python-engine.exe"
       }
     ],
