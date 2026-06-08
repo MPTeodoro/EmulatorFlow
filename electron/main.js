@@ -60,6 +60,7 @@ function startPythonEngine() {
     pythonProcess = spawn(cmd, args, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
     });
 
     // Give it 8 seconds to bind the port; if the process dies before that, report it
