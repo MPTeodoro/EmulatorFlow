@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EmulatorFlow — Automação visual para emuladores Android</title>
-  <meta name="description" content="Crie bots para jogos mobile arrastando e soltando nós, sem escrever código." />
+  <title>EmulatorFlow — Bots visuais para emuladores Android</title>
+  <meta name="description" content="Monte bots para jogos Android arrastando blocos. Conecta com BlueStacks, LDPlayer e outros via ADB. Sem código." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -52,37 +52,38 @@
     .hero {
       text-align: center;
       padding: 5rem 1.5rem 3rem;
-      max-width: 760px;
+      max-width: 700px;
       margin: 0 auto;
     }
     .badge {
       display: inline-block;
-      background: rgba(168,85,247,.15);
-      border: 1px solid rgba(168,85,247,.35);
+      background: rgba(168,85,247,.12);
+      border: 1px solid rgba(168,85,247,.3);
       color: var(--purple);
       border-radius: 999px;
       padding: .25rem .85rem;
       font-size: .75rem;
       font-weight: 600;
-      letter-spacing: .06em;
-      text-transform: uppercase;
+      letter-spacing: .04em;
       margin-bottom: 1.5rem;
     }
     h1 {
-      font-size: clamp(2.2rem, 5vw, 3.4rem);
+      font-size: clamp(2rem, 5vw, 3.2rem);
       font-weight: 800;
       line-height: 1.15;
       margin-bottom: 1.2rem;
+      letter-spacing: -.02em;
     }
     h1 span { color: var(--purple); }
     .subtitle {
       color: var(--muted);
-      font-size: 1.1rem;
-      line-height: 1.7;
+      font-size: 1.05rem;
+      line-height: 1.75;
       margin-bottom: 2.5rem;
     }
+    .subtitle strong { color: var(--text); font-weight: 500; }
 
-    /* ── DOWNLOAD BUTTON ─────────────────────────────────────────── */
+    /* ── DOWNLOAD ────────────────────────────────────────────────── */
     .dl-wrap { display: flex; flex-direction: column; align-items: center; gap: .6rem; }
     #dl-btn {
       display: inline-flex;
@@ -90,7 +91,7 @@
       gap: .6rem;
       background: var(--purple);
       color: #fff;
-      font-size: 1.05rem;
+      font-size: 1rem;
       font-weight: 700;
       padding: .85rem 2.2rem;
       border-radius: 10px;
@@ -105,68 +106,97 @@
     .dl-meta { color: var(--muted); font-size: .82rem; }
     #version-tag { font-weight: 600; color: var(--green); }
 
-    /* ── SMARTSCREEN WARNING ─────────────────────────────────────── */
+    /* ── SMARTSCREEN ─────────────────────────────────────────────── */
     .warning-box {
       margin: 2.5rem auto 0;
-      max-width: 540px;
-      background: rgba(234,179,8,.07);
-      border: 1px solid rgba(234,179,8,.25);
+      max-width: 500px;
+      background: rgba(234,179,8,.06);
+      border: 1px solid rgba(234,179,8,.2);
       border-radius: 10px;
       padding: 1rem 1.3rem;
       text-align: left;
     }
-    .warning-box h3 { font-size: .85rem; font-weight: 700; color: #eab308; margin-bottom: .5rem; }
-    .warning-box ol { padding-left: 1.2rem; }
-    .warning-box li { font-size: .82rem; color: var(--muted); line-height: 1.7; }
+    .warning-box h3 { font-size: .82rem; font-weight: 700; color: #eab308; margin-bottom: .4rem; }
+    .warning-box p { font-size: .81rem; color: var(--muted); line-height: 1.65; }
     .warning-box strong { color: var(--text); }
 
-    /* ── FEATURES ────────────────────────────────────────────────── */
-    .features {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1rem;
+    /* ── DIVIDER ─────────────────────────────────────────────────── */
+    .divider {
       max-width: 900px;
-      margin: 4rem auto;
+      margin: 4rem auto 0;
       padding: 0 1.5rem;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── HOW IT WORKS ────────────────────────────────────────────── */
+    .how {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 3.5rem 1.5rem;
+    }
+    .how h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 2rem;
+    }
+    .flow-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0;
+    }
+    .flow-step {
+      padding: 1.2rem 1.5rem;
+      border-left: 2px solid var(--border);
+      position: relative;
+    }
+    .flow-step:first-child { border-left: 2px solid var(--purple); }
+    .flow-num {
+      font-size: .7rem;
+      font-weight: 700;
+      color: var(--purple);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: .5rem;
+    }
+    .flow-step h3 { font-size: .95rem; font-weight: 700; margin-bottom: .35rem; }
+    .flow-step p { color: var(--muted); font-size: .82rem; line-height: 1.6; }
+
+    /* ── FEATURES (2 colunas) ────────────────────────────────────── */
+    .features {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 1.5rem 4rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
     }
     .feat {
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.3rem;
+      padding: 1.5rem;
     }
-    .feat-icon { font-size: 1.5rem; margin-bottom: .6rem; }
-    .feat h3 { font-size: .95rem; font-weight: 700; margin-bottom: .35rem; }
-    .feat p { color: var(--muted); font-size: .83rem; line-height: 1.6; }
+    .feat h3 { font-size: .9rem; font-weight: 700; margin-bottom: .4rem; }
+    .feat p { color: var(--muted); font-size: .82rem; line-height: 1.65; }
 
-    /* ── STEPS ───────────────────────────────────────────────────── */
-    .steps-section {
+    /* ── HONEST NOTE ─────────────────────────────────────────────── */
+    .honest {
       max-width: 640px;
       margin: 0 auto 4rem;
       padding: 0 1.5rem;
       text-align: center;
     }
-    .steps-section h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.8rem; }
-    .steps { display: flex; flex-direction: column; gap: .9rem; text-align: left; }
-    .step {
-      display: flex;
-      align-items: flex-start;
-      gap: 1rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1rem 1.2rem;
+    .honest p {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.75;
     }
-    .step-num {
-      flex-shrink: 0;
-      width: 28px; height: 28px;
-      background: var(--purple);
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: .8rem; font-weight: 800;
-    }
-    .step-text h4 { font-size: .9rem; font-weight: 700; margin-bottom: .2rem; }
-    .step-text p { color: var(--muted); font-size: .82rem; line-height: 1.5; }
+    .honest strong { color: var(--text); }
 
     /* ── FOOTER ──────────────────────────────────────────────────── */
     footer {
@@ -189,17 +219,18 @@
     </svg>
     EmulatorFlow
   </div>
-  <a href="https://github.com/MPTeodoro/EmulatorFlow" target="_blank">GitHub →</a>
+  <a href="https://github.com/MPTeodoro/EmulatorFlow" target="_blank">Ver código →</a>
 </nav>
 
 <section class="hero">
-  <div class="badge">Open Source · Gratuito</div>
+  <div class="badge">Windows · Gratuito · Código aberto</div>
 
-  <h1>Automatize jogos mobile<br/><span>sem escrever código</span></h1>
+  <h1>Monte bots para jogos mobile<br/><span>sem escrever uma linha de código</span></h1>
 
   <p class="subtitle">
-    Arraste e solte nós para criar bots visuais para Android.<br/>
-    Funciona com BlueStacks, LDPlayer, MEmu, NoxPlayer e celulares físicos.
+    Você liga o emulador, tira print da tela do jogo e arrasta blocos no canvas.<br/>
+    <strong>Clica aqui. Espera esse botão aparecer. Digita isso.</strong><br/>
+    É isso — sem Python, sem terminal, sem script.
   </p>
 
   <div class="dl-wrap">
@@ -213,91 +244,83 @@
     </a>
     <span class="dl-meta">
       Windows 10/11 · <span id="version-tag">—</span> ·
-      <a id="all-releases" href="https://github.com/MPTeodoro/EmulatorFlow/releases" style="color:var(--muted)">todas as versões</a>
+      <a id="all-releases" href="https://github.com/MPTeodoro/EmulatorFlow/releases" style="color:var(--muted)">versões anteriores</a>
     </span>
   </div>
 
   <div class="warning-box">
-    <h3>⚠️ Aviso do Windows ao instalar</h3>
-    <ol>
-      <li>Se aparecer <strong>"Windows protegeu seu PC"</strong>, clique em <strong>"Mais informações"</strong></li>
-      <li>Depois clique em <strong>"Executar assim mesmo"</strong></li>
-      <li>Isso acontece porque o app não tem assinatura digital paga — é seguro.</li>
-    </ol>
+    <h3>⚠ O Windows vai reclamar na primeira vez</h3>
+    <p>Clique em <strong>"Mais informações"</strong> e depois em <strong>"Executar assim mesmo"</strong>. Acontece porque o app não tem assinatura digital paga — é seguro, o código é aberto.</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section class="how">
+  <h2>Como funciona</h2>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="flow-num">01</div>
+      <h3>Conecta no emulador</h3>
+      <p>BlueStacks, LDPlayer, MEmu, NoxPlayer ou celular físico. O app detecta via ADB automaticamente.</p>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">02</div>
+      <h3>Tira print das telas</h3>
+      <p>Screenshot direto do emulador, salvo na galeria do projeto. Usa como referência para o nó de esperar imagem.</p>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">03</div>
+      <h3>Arrasta os blocos</h3>
+      <p>Clique, swipe, digitar texto, esperar imagem aparecer, lógica de loop — cada ação é um nó que você conecta.</p>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">04</div>
+      <h3>Roda e acompanha</h3>
+      <p>O fluxo executa nó a nó em tempo real. Você vê exatamente em qual passo o bot está.</p>
+    </div>
   </div>
 </section>
 
 <section class="features">
   <div class="feat">
-    <div class="feat-icon">🎨</div>
-    <h3>Editor visual de nós</h3>
-    <p>Monte fluxos arrastando blocos como um editor de fluxograma. Sem código.</p>
+    <h3>Galeria por projeto</h3>
+    <p>Cada projeto tem sua própria pasta de imagens. Sem misturar prints de jogos diferentes.</p>
   </div>
   <div class="feat">
-    <div class="feat-icon">📱</div>
-    <h3>Detecta emuladores automaticamente</h3>
-    <p>Conecta ao BlueStacks, LDPlayer, MEmu e outros sem configuração.</p>
+    <h3>Roda múltiplos fluxos</h3>
+    <p>Dá pra ter um bot rodando enquanto você edita ou testa outro. Cada execução fica independente.</p>
   </div>
   <div class="feat">
-    <div class="feat-icon">🖼️</div>
+    <h3>Importa e exporta JSON</h3>
+    <p>Salva o fluxo inteiro num arquivo, manda pra alguém, importa de volta. Compartilhamento simples.</p>
+  </div>
+  <div class="feat">
+    <h3>IA gera o fluxo pra você</h3>
+    <p>Descreve o que o bot tem que fazer com suas palavras. A IA monta os nós — você ajusta o que precisar.</p>
+  </div>
+  <div class="feat">
+    <h3>Atualiza sozinho</h3>
+    <p>Quando sair uma versão nova, o app avisa e instala em segundo plano. Sem ficar baixando manualmente.</p>
+  </div>
+  <div class="feat">
     <h3>Reconhecimento de imagem</h3>
-    <p>Tira print, salva na galeria do projeto e usa como referência nos nós.</p>
-  </div>
-  <div class="feat">
-    <div class="feat-icon">🤖</div>
-    <h3>Geração por IA</h3>
-    <p>Descreva o bot que quer criar e a IA gera o fluxo pronto pra usar.</p>
-  </div>
-  <div class="feat">
-    <div class="feat-icon">🛡️</div>
-    <h3>Bloqueio de anúncios</h3>
-    <p>Bloqueia anúncios no emulador via DNS privado com um clique.</p>
-  </div>
-  <div class="feat">
-    <div class="feat-icon">🔄</div>
-    <h3>Atualização automática</h3>
-    <p>O app avisa quando há nova versão e atualiza sozinho.</p>
+    <p>Espera um elemento aparecer na tela antes de continuar. Funciona com qualquer jogo.</p>
   </div>
 </section>
 
-<section class="steps-section">
-  <h2>Como começar</h2>
-  <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-text">
-        <h4>Baixe e instale o EmulatorFlow</h4>
-        <p>Execute o instalador acima. Se aparecer aviso do Windows, clique em "Mais informações" → "Executar assim mesmo".</p>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-text">
-        <h4>Abra seu emulador</h4>
-        <p>BlueStacks, LDPlayer ou qualquer emulador Android. No EmulatorFlow, clique no ícone de scan para detectar automaticamente.</p>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <div class="step-text">
-        <h4>Tire um print e crie seu fluxo</h4>
-        <p>Use o botão Screenshot para capturar telas do jogo. Arraste os nós para o canvas e conecte-os para definir o comportamento do bot.</p>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">4</div>
-      <div class="step-text">
-        <h4>Clique em Run</h4>
-        <p>O bot executa no emulador em tempo real. Você pode acompanhar o fluxo sendo executado nó a nó.</p>
-      </div>
-    </div>
-  </div>
+<section class="honest">
+  <p>
+    O EmulatorFlow é um projeto <strong>open source</strong>, feito por um desenvolvedor solo.<br/>
+    Ainda tem coisas pra melhorar — se algo não funcionar,
+    <a href="https://github.com/MPTeodoro/EmulatorFlow/issues" style="color:var(--purple)">abre uma issue</a> que a gente vê.
+  </p>
 </section>
 
 <footer>
-  EmulatorFlow é open source e gratuito ·
-  <a href="https://github.com/MPTeodoro/EmulatorFlow">Código no GitHub</a> ·
-  <a href="https://github.com/MPTeodoro/EmulatorFlow/issues">Reportar um problema</a>
+  EmulatorFlow ·
+  <a href="https://github.com/MPTeodoro/EmulatorFlow">GitHub</a> ·
+  <a href="https://github.com/MPTeodoro/EmulatorFlow/issues">Reportar problema</a>
 </footer>
 
 <script>
@@ -328,7 +351,6 @@
       const size = (asset.size / 1024 / 1024).toFixed(0);
       verTag.textContent = `${data.tag_name} · ${size} MB`;
     } catch {
-      // No release published yet
       btn.href = `https://github.com/${REPO}/releases`;
       btn.innerHTML = 'Ver releases no GitHub';
       btn.classList.remove('loading');
