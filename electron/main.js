@@ -217,6 +217,7 @@ ipcMain.handle('maximize-window', () => {
   win.isMaximized() ? win.unmaximize() : win.maximize();
 });
 ipcMain.handle('close-window', () => app.quit());
+ipcMain.handle('relaunch-app', () => { app.relaunch(); app.exit(0); });
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 

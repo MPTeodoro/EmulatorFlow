@@ -190,7 +190,7 @@ export default function App() {
               : 'Engine offline — the app cannot execute flows. Try restarting.'}
           </span>
           <button
-            onClick={() => window.electron?.closeWindow()}
+            onClick={() => window.electron?.relaunchApp()}
             className="flex items-center gap-1 text-xs text-accent-red border border-accent-red border-opacity-40 px-2 py-0.5 rounded hover:bg-accent-red hover:bg-opacity-15 transition-colors"
           >
             <RefreshCw size={10} /> Restart

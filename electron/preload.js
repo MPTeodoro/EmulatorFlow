@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electron', {
   minimizeWindow: ()                      => ipcRenderer.invoke('minimize-window'),
   maximizeWindow: ()                      => ipcRenderer.invoke('maximize-window'),
   closeWindow:    ()                      => ipcRenderer.invoke('close-window'),
+  relaunchApp:    ()                      => ipcRenderer.invoke('relaunch-app'),
 
   saveScreenshot: (base64Data, imagesDir) => ipcRenderer.invoke('save-screenshot', base64Data, imagesDir),
   listImages:     (imagesDir)             => ipcRenderer.invoke('list-images', imagesDir),
