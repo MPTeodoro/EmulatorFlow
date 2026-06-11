@@ -6,6 +6,21 @@ import base64
 import os
 
 
+def _imread_unicode(path: str):
+    """
+    cv2.imread returns None for paths with non-ASCII characters on Windows
+    (e.g. accented user folders like 'João'). Read the bytes ourselves and
+    let OpenCV decode them instead.
+    """
+    try:
+        data = np.fromfile(path, dtype=np.uint8)
+        if data.size == 0:
+            return None
+        return cv2.imdecode(data, cv2.IMREAD_COLOR)
+    except Exception:
+        return None
+
+
 class VisionEngine:
     """OpenCV-based template matching and image utilities."""
 
@@ -35,7 +50,7 @@ class VisionEngine:
         # Convert PIL screenshot → BGR numpy array for OpenCV
         screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
 
-        template_cv = cv2.imread(template_path)
+        template_cv = _imread_unicode(template_path)
         if template_cv is None:
             return {"matched": False, "confidence": 0.0, "location": None}
 

@@ -26,13 +26,18 @@ class AdBlocker:
     def enable(self, device: str) -> bool:
         try:
             api = self._android_api(device)
+            if api == 0:
+                # Couldn't even read the API level — device unreachable
+                return False
 
             if api >= 28:
                 # Android 9+ — Private DNS (DoT). Works in emulators.
-                self.adb._run(["shell", "settings", "put", "global",
-                               "private_dns_mode", "hostname"], device)
-                self.adb._run(["shell", "settings", "put", "global",
-                               "private_dns_specifier", ADGUARD_HOST], device)
+                code1, _, _ = self.adb._run(["shell", "settings", "put", "global",
+                                             "private_dns_mode", "hostname"], device)
+                code2, _, _ = self.adb._run(["shell", "settings", "put", "global",
+                                             "private_dns_specifier", ADGUARD_HOST], device)
+                if code1 != 0 or code2 != 0:
+                    return False
             else:
                 # Older Android — fallback to global DNS settings
                 self.adb.set_dns(device, ADGUARD_DNS1, ADGUARD_DNS2)

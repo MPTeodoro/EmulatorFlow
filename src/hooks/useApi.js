@@ -9,7 +9,13 @@ async function apiFetch(path, options = {}) {
     const text = await response.text();
     throw new Error(`API error ${response.status}: ${text}`);
   }
-  return response.json();
+  const data = await response.json();
+  // The engine reports failures as HTTP 200 + { error: "..." } — surface
+  // them so Stop/Pause/Screenshot failures aren't silently swallowed
+  if (data && typeof data === 'object' && data.error) {
+    throw new Error(data.error);
+  }
+  return data;
 }
 
 export function useApi() {

@@ -2,13 +2,27 @@ const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const fsp = fs.promises;
+const { spawn, execSync } = require('child_process');
 
 const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev') || !app.isPackaged;
 
 let win = null;
 let pythonProcess = null;
 let engineReady = false;
+
+// A second instance would spawn another engine that loses the race for port
+// 8765 and then share the same project files — focus the first window instead.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
+}
 
 // ─── Auto-updater ────────────────────────────────────────────────────────────
 
@@ -35,6 +49,23 @@ function setupAutoUpdater() {
 }
 
 // ─── Python engine ───────────────────────────────────────────────────────────
+
+function killPythonEngine() {
+  if (!pythonProcess) return;
+  const pid = pythonProcess.pid;
+  pythonProcess = null;
+  engineReady = false;
+  try {
+    if (process.platform === 'win32') {
+      // PyInstaller one-file runs as a bootloader + child python process;
+      // .kill() only hits the bootloader and the child keeps port 8765
+      // busy forever — taskkill /T takes the whole tree down.
+      execSync(`taskkill /pid ${pid} /T /F`, { windowsHide: true, stdio: 'ignore' });
+    } else {
+      process.kill(pid, 'SIGTERM');
+    }
+  } catch { /* already dead */ }
+}
 
 function startPythonEngine() {
   let cmd, args, cwd;
@@ -63,12 +94,13 @@ function startPythonEngine() {
       windowsHide: true,
     });
 
-    // Give it 8 seconds to bind the port; if the process dies before that, report it
+    // PyInstaller one-file extracts itself on first run and antivirus scans
+    // can stall that for a long while on slower machines — be generous.
     const startTimeout = setTimeout(() => {
       if (!engineReady) {
         win?.webContents.send('engine-status', { ok: false, reason: 'timeout' });
       }
-    }, 8000);
+    }, 30000);
 
     const checkReady = (msg) => {
       if (!engineReady && msg.includes('8765')) {
@@ -155,23 +187,30 @@ ipcMain.handle('get-app-version', () => app.getVersion());
 // ─── IPC: file system ────────────────────────────────────────────────────────
 
 ipcMain.handle('read-file', async (_e, filePath) => {
-  const buffer = fs.readFileSync(filePath);
+  const buffer = await fsp.readFile(filePath);
   return buffer.toString('base64');
 });
 
 ipcMain.handle('write-file', async (_e, filePath, base64Data) => {
   const buffer = Buffer.from(base64Data, 'base64');
-  fs.writeFileSync(filePath, buffer);
+  // Atomic write: a crash mid-write must never leave a half-written
+  // workflow.json behind (rename replaces the target even on Windows)
+  const tmpPath = `${filePath}.tmp`;
+  await fsp.writeFile(tmpPath, buffer);
+  await fsp.rename(tmpPath, filePath);
   return true;
 });
 
 ipcMain.handle('list-dir', async (_e, dirPath) => {
-  if (!fs.existsSync(dirPath)) return [];
-  return fs.readdirSync(dirPath);
+  try {
+    return await fsp.readdir(dirPath);
+  } catch {
+    return [];
+  }
 });
 
 ipcMain.handle('ensure-dir', async (_e, dirPath) => {
-  fs.mkdirSync(dirPath, { recursive: true });
+  await fsp.mkdir(dirPath, { recursive: true });
   return true;
 });
 
@@ -180,28 +219,42 @@ ipcMain.handle('get-projects-path', async () =>
 );
 
 ipcMain.handle('save-screenshot', async (_e, base64Data, imagesDir) => {
-  fs.mkdirSync(imagesDir, { recursive: true });
+  await fsp.mkdir(imagesDir, { recursive: true });
   const filename = `screenshot_${Date.now()}.jpg`;
   const filePath = path.join(imagesDir, filename);
-  fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+  await fsp.writeFile(filePath, Buffer.from(base64Data, 'base64'));
   return { name: filename, path: filePath };
 });
 
 ipcMain.handle('list-images', async (_e, imagesDir) => {
-  if (!fs.existsSync(imagesDir)) return [];
   const exts = ['.png', '.jpg', '.jpeg'];
-  return fs.readdirSync(imagesDir)
-    .filter((f) => exts.includes(path.extname(f).toLowerCase()))
-    .map((name) => {
-      const filePath = path.join(imagesDir, name);
-      const data = fs.readFileSync(filePath).toString('base64');
-      const mime = path.extname(name).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
-      return { name, path: filePath, dataUrl: `data:${mime};base64,${data}` };
-    });
+  let entries;
+  try {
+    entries = await fsp.readdir(imagesDir);
+  } catch {
+    return [];
+  }
+  const images = await Promise.all(
+    entries
+      .filter((f) => exts.includes(path.extname(f).toLowerCase()))
+      .map(async (name) => {
+        const filePath = path.join(imagesDir, name);
+        try {
+          const data = (await fsp.readFile(filePath)).toString('base64');
+          const mime = path.extname(name).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
+          return { name, path: filePath, dataUrl: `data:${mime};base64,${data}` };
+        } catch {
+          return null;
+        }
+      })
+  );
+  return images.filter(Boolean);
 });
 
 ipcMain.handle('delete-image', async (_e, filePath) => {
-  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  try {
+    await fsp.unlink(filePath);
+  } catch { /* already gone */ }
   return true;
 });
 
@@ -228,7 +281,14 @@ ipcMain.handle('maximize-window', () => {
   win.isMaximized() ? win.unmaximize() : win.maximize();
 });
 ipcMain.handle('close-window', () => app.quit());
-ipcMain.handle('relaunch-app', () => { app.relaunch(); app.exit(0); });
+ipcMain.handle('relaunch-app', () => {
+  // app.exit() skips before-quit, so kill the engine explicitly here —
+  // an orphaned engine keeps port 8765 busy and the relaunched app's
+  // engine can never bind it ("Engine offline" forever).
+  killPythonEngine();
+  app.relaunch();
+  app.exit(0);
+});
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
@@ -240,12 +300,12 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (pythonProcess) { pythonProcess.kill(); pythonProcess = null; }
+  killPythonEngine();
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('activate', () => { if (win === null) createWindow(); });
 
 app.on('before-quit', () => {
-  if (pythonProcess) { pythonProcess.kill(); pythonProcess = null; }
+  killPythonEngine();
 });

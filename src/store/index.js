@@ -45,9 +45,20 @@ const useStore = create((set, get) => ({
     set((state) => ({ workflow: { ...state.workflow, edges } })),
 
   onNodesChange: (changes) =>
-    set((state) => ({
-      workflow: { ...state.workflow, nodes: applyNodeChanges(changes, state.workflow.nodes) },
-    })),
+    set((state) => {
+      // Deleting via keyboard goes through here (not deleteNode) — the
+      // PropertiesPanel must not keep showing the removed node
+      const removedIds = new Set(
+        changes.filter((c) => c.type === 'remove').map((c) => c.id)
+      );
+      return {
+        workflow: { ...state.workflow, nodes: applyNodeChanges(changes, state.workflow.nodes) },
+        selectedNode:
+          state.selectedNode && removedIds.has(state.selectedNode.id)
+            ? null
+            : state.selectedNode,
+      };
+    }),
 
   onEdgesChange: (changes) =>
     set((state) => ({
@@ -96,45 +107,53 @@ const useStore = create((set, get) => ({
 
   // ── Multi-run actions ─────────────────────────────────────────────────────
 
-  // Called when a new run starts — becomes the watched run
+  // Called when a new run starts — becomes the watched run.
+  // WS messages for the run can arrive before the HTTP response that
+  // triggers this, so merge with any placeholder entry instead of resetting.
   addRun: (runId, name, device) =>
-    set((state) => ({
-      runs: {
-        ...state.runs,
-        [runId]: { name, device, status: 'running', activeNodeId: null, nodeResults: {} },
-      },
-      currentRunId: runId,
-      executionStatus: 'running',
-      activeNodeId: null,
-      nodeResults: {},
-    })),
+    set((state) => {
+      const existing = state.runs[runId];
+      const run = {
+        status: 'running',
+        activeNodeId: null,
+        nodeResults: {},
+        ...(existing || {}),
+        name,
+        device,
+      };
+      return {
+        runs: { ...state.runs, [runId]: run },
+        currentRunId: runId,
+        executionStatus: run.status,
+        activeNodeId: run.activeNodeId,
+        nodeResults: run.nodeResults,
+      };
+    }),
 
-  // Update a run's status/activeNode
+  // Update a run's status/activeNode — creates a placeholder if the WS
+  // message beat the /execute/start HTTP response (addRun)
   updateRunStatus: (runId, status, activeNodeId) =>
     set((state) => {
-      const run = state.runs[runId];
-      if (!run) return {};
+      const run = state.runs[runId] ||
+        { name: '...', device: '', status: 'running', activeNodeId: null, nodeResults: {} };
+      const nextActive = activeNodeId !== undefined ? activeNodeId : run.activeNodeId;
       const updated = {
         ...state.runs,
-        [runId]: {
-          ...run,
-          status,
-          activeNodeId: activeNodeId !== undefined ? activeNodeId : run.activeNodeId,
-        },
+        [runId]: { ...run, status, activeNodeId: nextActive },
       };
       // Also mirror into global fields if this is the watched run
       const isWatched = runId === state.currentRunId;
       return {
         runs: updated,
-        ...(isWatched ? { executionStatus: status, activeNodeId: activeNodeId ?? state.activeNodeId } : {}),
+        ...(isWatched ? { executionStatus: status, activeNodeId: nextActive } : {}),
       };
     }),
 
   // Update a node result within a specific run
   setRunNodeResult: (runId, nodeId, result) =>
     set((state) => {
-      const run = state.runs[runId];
-      if (!run) return {};
+      const run = state.runs[runId] ||
+        { name: '...', device: '', status: 'running', activeNodeId: null, nodeResults: {} };
       const updatedRun = {
         ...run,
         nodeResults: { ...run.nodeResults, [nodeId]: result },
@@ -199,7 +218,24 @@ const useStore = create((set, get) => ({
       for (const rid of Object.keys(merged)) {
         if (!activeIds.has(rid)) delete merged[rid];
       }
-      return { runs: merged };
+
+      // If the watched run was pruned (its run_ended was lost while the WS
+      // was down), re-point the watcher like removeRun does — otherwise the
+      // toolbar stays stuck on 'Running' forever
+      let { currentRunId } = state;
+      let mirror = {};
+      if (currentRunId && !merged[currentRunId]) {
+        const ids = Object.keys(merged);
+        currentRunId = ids.length > 0 ? ids[ids.length - 1] : null;
+        const next = currentRunId ? merged[currentRunId] : null;
+        mirror = {
+          executionStatus: next?.status ?? 'idle',
+          activeNodeId: next?.activeNodeId ?? null,
+          nodeResults: next?.nodeResults ?? {},
+        };
+      }
+
+      return { runs: merged, currentRunId, ...mirror };
     }),
 
   // ── Device actions ────────────────────────────────────────────────────────

@@ -77,7 +77,9 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    # UPX-packed Python/OpenCV DLLs are a classic antivirus false-positive
+    # trigger (and occasionally crash) — a bigger exe is the safer trade
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,   # headless — no terminal window for end users

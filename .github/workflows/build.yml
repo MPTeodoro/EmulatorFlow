@@ -58,17 +58,25 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      # Without this every installer is built as whatever stale version sits
+      # in package.json and the auto-updater never sees a newer release
+      - name: Sync package.json version with the tag
+        run: npm version --no-git-tag-version ("$env:GITHUB_REF_NAME" -replace '^v','')
+
       - name: Build Vite + Electron installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run build
 
       # ── Upload to GitHub Release ──────────────────────────────────────────
+      # latest.yml is what the auto-updater polls; the .blockmap enables
+      # differential (smaller) update downloads
       - name: Upload installer to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             release/*.exe
+            release/*.blockmap
             release/latest.yml
           generate_release_notes: true
         env:

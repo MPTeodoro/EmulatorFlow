@@ -1,6 +1,6 @@
 {
   "name": "emulatorflow",
-  "version": "1.0.0",
+  "version": "1.0.5",
   "description": "Visual node-based workflow editor for mobile emulator bot automation",
   "main": "electron/main.js",
   "repository": {
@@ -9,8 +9,8 @@
   },
   "scripts": {
     "dev": "concurrently --kill-others \"vite\" \"wait-on http://localhost:5173 && electron . --dev\"",
-    "build": "vite build && electron-builder",
-    "build:win": "vite build && electron-builder --win",
+    "build": "vite build && electron-builder --publish never",
+    "build:win": "vite build && electron-builder --win --publish never",
     "preview": "vite preview",
     "gen-icon": "python scripts/generate_icon.py"
   },

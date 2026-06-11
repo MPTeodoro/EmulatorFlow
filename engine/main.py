@@ -119,7 +119,8 @@ async def health():
 
 @app.get("/devices")
 async def list_devices():
-    devices = adb.get_devices()
+    # adb calls block for up to 15s per device — keep them off the event loop
+    devices = await asyncio.to_thread(adb.get_devices)
     return {"devices": [d.dict() for d in devices]}
 
 
@@ -264,6 +265,9 @@ async def pause_execution(req: PauseRequest = None):
         return {"error": "Run is not active"}
 
     await executor.pause()
+    # Broadcast the new state so every connected window updates its UI —
+    # the HTTP response alone only reaches whoever clicked the button.
+    await executor.emit_state("paused" if executor.paused else "running")
     state = "paused" if executor.paused else "resumed"
     return {"status": state}
 

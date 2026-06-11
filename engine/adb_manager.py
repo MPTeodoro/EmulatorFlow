@@ -22,12 +22,17 @@ def _find_adb() -> str:
 
 _ADB = _find_adb()
 
+# The engine runs as a windowed app (PyInstaller console=False), so every
+# subprocess on Windows would otherwise spawn a visible console window —
+# the device-polling loop made a CMD flash every few seconds.
+_CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
+
 
 class ADBManager:
     KNOWN_EMULATOR_PORTS = [
         ("BlueStacks 5",        5555),
         ("BlueStacks 5 (alt)",  5585),
-        ("LDPlayer",            5554),
+        ("LDPlayer",            5555),  # 5554 is the emulator console port, not adb
         ("MEmu",                21503),
         ("NoxPlayer",           62001),
         ("MuMu Player",         7555),
@@ -50,7 +55,10 @@ class ADBManager:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",   # adb always outputs UTF-8; the Windows
+                errors="replace",   # locale default (cp1252) would crash on it
                 timeout=15,
+                creationflags=_CREATE_NO_WINDOW,
             )
             return result.returncode, result.stdout.strip(), result.stderr.strip()
         except subprocess.TimeoutExpired:
@@ -121,6 +129,7 @@ class ADBManager:
                     [_ADB, "connect", f"127.0.0.1:{port}"],
                     capture_output=True,
                     timeout=3,
+                    creationflags=_CREATE_NO_WINDOW,
                 )
             except Exception:
                 pass
@@ -153,6 +162,7 @@ class ADBManager:
                 [_ADB, "-s", device, "exec-out", "screencap", "-p"],
                 capture_output=True,
                 timeout=15,
+                creationflags=_CREATE_NO_WINDOW,
             )
         except subprocess.TimeoutExpired:
             return None
@@ -174,13 +184,14 @@ class ADBManager:
     #  Input actions                                                       #
     # ------------------------------------------------------------------ #
 
-    def tap(self, device: str, x: int, y: int, duration: int = 100) -> None:
+    def tap(self, device: str, x: int, y: int, duration: int = 100) -> bool:
         """Simulate a tap (or long-press when duration > ~500 ms) at (x, y)."""
-        self._run(
+        code, _, _ = self._run(
             ["shell", "input", "swipe",
              str(x), str(y), str(x), str(y), str(duration)],
             device=device,
         )
+        return code == 0
 
     def swipe(
         self,
@@ -190,30 +201,23 @@ class ADBManager:
         x2: int,
         y2: int,
         duration: int = 500,
-    ) -> None:
+    ) -> bool:
         """Swipe from (x1, y1) to (x2, y2) over *duration* ms."""
-        self._run(
+        code, _, _ = self._run(
             ["shell", "input", "swipe",
              str(x1), str(y1), str(x2), str(y2), str(duration)],
             device=device,
         )
+        return code == 0
 
-    def type_text(self, device: str, text: str) -> None:
+    def type_text(self, device: str, text: str) -> bool:
         """Type a string of text on the device."""
         # Escape characters that the shell input command treats specially
-        escaped = (
-            text
-            .replace("\\", "\\\\")
-            .replace(" ", "%s")
-            .replace("'", "\\'")
-            .replace('"', '\\"')
-            .replace("&", "\\&")
-            .replace(";", "\\;")
-            .replace("<", "\\<")
-            .replace(">", "\\>")
-            .replace("|", "\\|")
-        )
-        self._run(["shell", "input", "text", escaped], device=device)
+        escaped = text.replace("\\", "\\\\")
+        for ch in " '\"&;<>|()~`$#!*":
+            escaped = escaped.replace(ch, "%s" if ch == " " else f"\\{ch}")
+        code, _, _ = self._run(["shell", "input", "text", escaped], device=device)
+        return code == 0
 
     # ------------------------------------------------------------------ #
     #  DNS / ad-blocking helpers                                           #

@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import os
+import time
 from typing import Callable, Awaitable
 
 try:
@@ -44,10 +45,21 @@ class FlowExecutor:
         self.node_map: dict[str, Node] = {n.id: n for n in workflow.nodes}
 
         # edge_map: (source_id, source_handle) → target_id
+        # Fan-out (two edges leaving the same handle) is not supported —
+        # the last edge silently wins, so remember them to warn the user.
         self.edge_map: dict[tuple[str, str], str] = {}
+        self._fanout_warnings: list[str] = []
         for edge in workflow.edges:
             handle = edge.sourceHandle or "out"
-            self.edge_map[(edge.source, handle)] = edge.target
+            key = (edge.source, handle)
+            if key in self.edge_map:
+                src = self.node_map.get(edge.source)
+                name = (src.data.label if src else None) or edge.source
+                self._fanout_warnings.append(
+                    f"Node '{name}' has more than one edge on output "
+                    f"'{handle}' — only the last one will be followed"
+                )
+            self.edge_map[key] = edge.target
 
     # ------------------------------------------------------------------ #
     #  Messaging helpers                                                   #
@@ -87,6 +99,8 @@ class FlowExecutor:
             return
 
         await self.log(f"Starting workflow: {self.workflow.name}")
+        for warning in self._fanout_warnings:
+            await self.log(warning, "warn")
         await self.emit_state("running")
 
         try:
@@ -154,11 +168,17 @@ class FlowExecutor:
                 }
             )
 
-            # Follow the edge that matches the output handle
+            # Follow the edge that matches the output handle.
+            # A node that errored must NOT fall back to its success path —
+            # without an explicit "error" edge the run stops here.
             next_id = self.edge_map.get((current_id, output_handle))
-            # If no specific edge exists for this handle, check "out" as fallback
-            if next_id is None and output_handle != "out":
+            if next_id is None and output_handle not in ("out", "error"):
                 next_id = self.edge_map.get((current_id, "out"))
+            if next_id is None and output_handle == "error":
+                await self.log(
+                    "Node failed and has no 'error' edge connected — stopping run",
+                    "error",
+                )
 
             current_id = next_id
 
@@ -232,14 +252,24 @@ class FlowExecutor:
         elif t == "wait_for_image":
             timeout = d.timeout or 30.0
             interval = max(0.5, d.interval or 2.0)
-            elapsed = 0.0
             template_path = self._resolve_template_path(d.image_path)
 
             await self.log(
                 f"[{label}] Waiting for image (timeout: {timeout}s, interval: {interval}s)..."
             )
 
-            while elapsed < timeout and self.running:
+            # Wall-clock deadline — screenshot + matching time counts too,
+            # not just the sleeps. Time spent paused extends the deadline.
+            start = time.monotonic()
+            deadline = start + timeout
+
+            while time.monotonic() < deadline and self.running:
+                if self.paused:
+                    paused_at = time.monotonic()
+                    while self.paused and self.running:
+                        await asyncio.sleep(0.1)
+                    deadline += time.monotonic() - paused_at
+
                 screenshot = await asyncio.to_thread(self.adb.screenshot, self.device)
                 if screenshot is not None:
                     result = await asyncio.to_thread(
@@ -250,12 +280,11 @@ class FlowExecutor:
                     )
                     if result["matched"]:
                         await self.log(
-                            f"[{label}] Image found after {elapsed:.1f}s"
+                            f"[{label}] Image found after {time.monotonic() - start:.1f}s"
                         )
                         return "found"
 
                 await asyncio.sleep(interval)
-                elapsed += interval
 
             await self.log(f"[{label}] Timeout after {timeout}s", "warn")
             return "timeout"
@@ -263,9 +292,11 @@ class FlowExecutor:
         # ---- tap ------------------------------------------------------ #
         elif t == "tap":
             await self.log(f"[{label}] Tapping ({d.x}, {d.y})")
-            await asyncio.to_thread(
+            ok = await asyncio.to_thread(
                 self.adb.tap, self.device, d.x, d.y, d.duration or 100
             )
+            if not ok:
+                await self.log(f"[{label}] adb reported the tap failed", "warn")
             await asyncio.sleep(0.1)
             return "out"
 
@@ -274,7 +305,7 @@ class FlowExecutor:
             await self.log(
                 f"[{label}] Swiping ({d.x1},{d.y1}) → ({d.x2},{d.y2})"
             )
-            await asyncio.to_thread(
+            ok = await asyncio.to_thread(
                 self.adb.swipe,
                 self.device,
                 d.x1,
@@ -283,6 +314,8 @@ class FlowExecutor:
                 d.y2,
                 d.duration or 500,
             )
+            if not ok:
+                await self.log(f"[{label}] adb reported the swipe failed", "warn")
             await asyncio.sleep(0.2)
             return "out"
 
@@ -313,6 +346,12 @@ class FlowExecutor:
                 visited: set[str] = set()
 
                 while current_id and self.running and current_id != node.id:
+                    # Honour pause inside the loop body too
+                    while self.paused and self.running:
+                        await asyncio.sleep(0.1)
+                    if not self.running:
+                        break
+
                     if current_id in visited:
                         # Cycle detected inside body – break to avoid hang
                         await self.log(
@@ -349,8 +388,14 @@ class FlowExecutor:
                     )
 
                     next_id = self.edge_map.get((current_id, body_output))
-                    if next_id is None and body_output != "out":
+                    if next_id is None and body_output not in ("out", "error"):
                         next_id = self.edge_map.get((current_id, "out"))
+                    if next_id is None and body_output == "error":
+                        await self.log(
+                            f"[{label}] Body node failed with no 'error' edge — "
+                            "skipping to next iteration",
+                            "warn",
+                        )
                     current_id = next_id
 
                 iteration += 1
@@ -393,15 +438,25 @@ class FlowExecutor:
             rx = random.randint(x1, x2) if x1 != x2 else x1
             ry = random.randint(y1, y2) if y1 != y2 else y1
             await self.log(f"[{label}] Random tap at ({rx}, {ry})")
-            await asyncio.to_thread(self.adb.tap, self.device, rx, ry, d.duration or 100)
+            ok = await asyncio.to_thread(self.adb.tap, self.device, rx, ry, d.duration or 100)
+            if not ok:
+                await self.log(f"[{label}] adb reported the tap failed", "warn")
             await asyncio.sleep(0.1)
             return "out"
 
         # ---- type_text ------------------------------------------------ #
         elif t == "type_text":
             text = d.text or ""
+            if text and not text.isascii():
+                await self.log(
+                    f"[{label}] Text contains accented/non-ASCII characters — "
+                    "'adb input text' cannot type those, they may be skipped",
+                    "warn",
+                )
             await self.log(f"[{label}] Typing: {repr(text[:40])}")
-            await asyncio.to_thread(self.adb.type_text, self.device, text)
+            ok = await asyncio.to_thread(self.adb.type_text, self.device, text)
+            if not ok:
+                await self.log(f"[{label}] adb reported typing failed", "warn")
             await asyncio.sleep(0.1)
             return "out"
 

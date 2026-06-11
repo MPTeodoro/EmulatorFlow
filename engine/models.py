@@ -20,6 +20,7 @@ class NodeData(BaseModel):
     timeout: float = 30.0       # for wait_for_image
     interval: float = 2.0       # polling interval for wait_for_image
     message: str = ""           # for log node
+    text: str = ""              # for type_text node
 
 
 class Node(BaseModel):

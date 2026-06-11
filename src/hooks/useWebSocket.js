@@ -9,6 +9,8 @@ export default function useWebSocket() {
   const reconnectTimerRef = useRef(null);
   const mountedRef = useRef(true);
 
+  // Actions only — getState() avoids subscribing the host component (App)
+  // to the whole store, which re-rendered the entire tree on every log line
   const {
     setWsConnected,
     addLog,
@@ -17,7 +19,7 @@ export default function useWebSocket() {
     setRunNodeResult,
     removeRun,
     syncRuns,
-  } = useStore();
+  } = useStore.getState();
 
   const handleMessage = (msg) => {
     // Always pull fresh state inside callbacks to avoid stale closures

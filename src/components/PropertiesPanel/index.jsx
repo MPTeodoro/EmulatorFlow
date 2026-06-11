@@ -65,7 +65,13 @@ function NumberInput({ value, onChange, placeholder, min, max, step }) {
     <input
       type="number"
       value={value ?? ''}
-      onChange={(e) => onChange(parseFloat(e.target.value))}
+      onChange={(e) => {
+        // Clearing the field gives parseFloat('') = NaN, which JSON turns
+        // into null and the engine rejects — store undefined instead so
+        // the engine falls back to the node's default
+        const n = parseFloat(e.target.value);
+        onChange(Number.isNaN(n) ? undefined : n);
+      }}
       placeholder={placeholder}
       min={min}
       max={max}

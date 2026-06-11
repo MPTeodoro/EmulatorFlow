@@ -40,6 +40,9 @@ export default function App() {
 
   const autoSaveTimer = useRef(null);
   const lastSavedRef  = useRef(null); // JSON string of last saved workflow
+  const workflowRef   = useRef(workflow); // latest workflow, for flush-on-switch
+
+  useEffect(() => { workflowRef.current = workflow; });
 
   useWebSocket();
 
@@ -50,9 +53,11 @@ export default function App() {
       if (engineTimeoutRef.current) clearTimeout(engineTimeoutRef.current);
       return;
     }
+    // Generous: the packaged engine self-extracts on first run and AV scans
+    // can hold it for a while — a premature banner just scares the user
     engineTimeoutRef.current = setTimeout(() => {
       if (!wsConnected) setEngineBanner('offline');
-    }, 9000);
+    }, 20000);
     return () => { if (engineTimeoutRef.current) clearTimeout(engineTimeoutRef.current); };
   }, [wsConnected]);
 
@@ -169,6 +174,23 @@ export default function App() {
 
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   }, [workflow, currentProject]);
+
+  // ── Flush pending auto-save when the project changes ───────────────────────
+  // Switching projects within the 1.5s debounce window used to silently drop
+  // the last edits. This cleanup runs with the OLD project/workflow values.
+  useEffect(() => {
+    const proj = currentProject;
+    return () => {
+      if (!proj || !window.electron) return;
+      const wf = workflowRef.current;
+      const snapshot = JSON.stringify({ nodes: wf.nodes, edges: wf.edges });
+      if (snapshot === lastSavedRef.current) return; // already saved
+      const toSave = { id: proj.id, name: proj.name, nodes: wf.nodes, edges: wf.edges };
+      window.electron
+        .writeFile(`${proj.path}/workflow.json`, encodeWorkflow(toSave))
+        .catch(() => {});
+    };
+  }, [currentProject]);
 
   // ── Python engine logs ─────────────────────────────────────────────────────
   useEffect(() => {
