@@ -61,7 +61,7 @@ jobs:
       # Without this every installer is built as whatever stale version sits
       # in package.json and the auto-updater never sees a newer release
       - name: Sync package.json version with the tag
-        run: npm version --no-git-tag-version ("$env:GITHUB_REF_NAME" -replace '^v','')
+        run: npm version --no-git-tag-version --allow-same-version ("$env:GITHUB_REF_NAME" -replace '^v','')
 
       - name: Build Vite + Electron installer
         env:
